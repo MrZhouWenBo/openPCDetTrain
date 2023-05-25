@@ -156,16 +156,16 @@ def main():
         total_time = 0
         total_num = 0
 
-        if(display):
-            vis = open3d.visualization.Visualizer()
-            vis.create_window()
-            vis.get_render_option().point_size = 2.0
-            vis.get_render_option().background_color = np.zeros(3)
-            axis_pcd = open3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0, origin=[0, 0, 0])
-            vis.add_geometry(axis_pcd)
-            pts = open3d.geometry.PointCloud()
-            vis.add_geometry(pts)
-            to_reset = True
+        # if(display):
+        #     vis = open3d.visualization.Visualizer()
+        #     vis.create_window()
+        #     vis.get_render_option().point_size = 2.0
+        #     vis.get_render_option().background_color = np.zeros(3)
+        #     axis_pcd = open3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0, origin=[0, 0, 0])
+        #     vis.add_geometry(axis_pcd)
+        #     pts = open3d.geometry.PointCloud()
+        #     vis.add_geometry(pts)
+        #     to_reset = True
 
         for idx, data_dict in enumerate(demo_dataset):
             logger.info(f'Visualized sample index: \t{idx + 1}')
@@ -193,6 +193,7 @@ def main():
                 # print('pred_labels: ', pred_dicts[0]['pred_boxes'])
                 # print('J note !! ', pred_dicts[0]['pred_labels'])
                 print(pred_dicts[0]['pred_boxes'])
+                print(pred_dicts[0]['pred_scores'])
                 V.draw_scenes(
                     points=data_dict['points'][:, 1:], ref_boxes=pred_dicts[0]['pred_boxes'],
                     ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels'] 
