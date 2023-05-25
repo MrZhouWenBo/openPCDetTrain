@@ -39,12 +39,35 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 
 const int THREADS_PER_BLOCK_NMS = sizeof(unsigned long long) * 8;
 
-
+void boxesalignedoverlapLauncher(const int num_box, const float *boxes_a, const float *boxes_b, float *ans_overlap);
 void boxesoverlapLauncher(const int num_a, const float *boxes_a, const int num_b, const float *boxes_b, float *ans_overlap);
 void boxesioubevLauncher(const int num_a, const float *boxes_a, const int num_b, const float *boxes_b, float *ans_iou);
 void nmsLauncher(const float *boxes, unsigned long long * mask, int boxes_num, float nms_overlap_thresh);
 void nmsNormalLauncher(const float *boxes, unsigned long long * mask, int boxes_num, float nms_overlap_thresh);
 
+
+int boxes_aligned_overlap_bev_gpu(at::Tensor boxes_a, at::Tensor boxes_b, at::Tensor ans_overlap){
+    // params boxes_a: (N, 7) [x, y, z, dx, dy, dz, heading]
+    // params boxes_b: (N, 7) [x, y, z, dx, dy, dz, heading]
+    // params ans_overlap: (N, 1)
+
+    CHECK_INPUT(boxes_a);
+    CHECK_INPUT(boxes_b);
+    CHECK_INPUT(ans_overlap);
+
+    int num_box = boxes_a.size(0);
+    int num_b = boxes_b.size(0);
+
+    assert(num_box == num_b);
+
+    const float * boxes_a_data = boxes_a.data<float>();
+    const float * boxes_b_data = boxes_b.data<float>();
+    float * ans_overlap_data = ans_overlap.data<float>();
+
+    boxesalignedoverlapLauncher(num_box, boxes_a_data, boxes_b_data, ans_overlap_data);
+
+    return 1;
+}
 
 int boxes_overlap_bev_gpu(at::Tensor boxes_a, at::Tensor boxes_b, at::Tensor ans_overlap){
     // params boxes_a: (N, 7) [x, y, z, dx, dy, dz, heading]
@@ -87,20 +110,16 @@ int boxes_iou_bev_gpu(at::Tensor boxes_a, at::Tensor boxes_b, at::Tensor ans_iou
     return 1;
 }
 
-
-int nms_gpu(at::Tensor boxes, at::Tensor keep, float nms_overlap_thresh)
-{
+int nms_gpu(at::Tensor boxes, at::Tensor keep, float nms_overlap_thresh){
     // params boxes: (N, 7) [x, y, z, dx, dy, dz, heading]
     // params keep: (N)
     CHECK_INPUT(boxes);
-    // 要保证keep内存连续？
     CHECK_CONTIGUOUS(keep);
 
     int boxes_num = boxes.size(0);
     const float * boxes_data = boxes.data<float>();
     long * keep_data = keep.data<long>();
 
-    // 每个block分配THREADS_PER_BLOCK_NMS个线程    每个block计算需要一个线程  求需要几个block
     const int col_blocks = DIVUP(boxes_num, THREADS_PER_BLOCK_NMS);
 
     unsigned long long *mask_data = NULL;

@@ -17,8 +17,9 @@ import torch,sys
 abPath = os.path.abspath(os.path.dirname(os.getcwd()))
 sys.path.append(abPath)
 
+print(sys.path)
 from pcdet.data2voxel_cpp import lib_cpp
-
+# import lib_cpp
 
 
 from pcdet.config import cfg, cfg_from_yaml_file
@@ -65,7 +66,7 @@ class DemoDataset(DatasetTemplate):
 
     def __getitem__(self, index):
         if self.ext == '.bin':
-            points = np.fromfile(self.sample_file_list[index], dtype=np.float32).reshape(-1, 4)
+            points = np.fromfile(self.sample_file_list[index], dtype=np.float32).reshape(-1, 8)[:, 0:4]
         elif self.ext == '.npy':
             points = np.load(self.sample_file_list[index])
         else:
@@ -84,6 +85,7 @@ class DemoDataset(DatasetTemplate):
 
 
         pointcloud_range = self.dataset_cfg.POINT_CLOUD_RANGE
+        print('self.dataset_cfg.POINT_CLOUD_RANGE', pointcloud_range)
         voxel_size = self.dataset_cfg.DATA_PROCESSOR[2].VOXEL_SIZE
         
         HEIGHT = round((pointcloud_range[3] - pointcloud_range[0])/voxel_size[0])
@@ -94,6 +96,7 @@ class DemoDataset(DatasetTemplate):
                                                                                         pointcloud_range[2], pointcloud_range[3],  pointcloud_range[4], pointcloud_range[5], 
                                                                                         voxel_size[0], voxel_size[1], voxel_size[2], 0)
         np.mean(spatial_features)
+        print(spatial_features.shape)
         data_dict['spatial_features' ] = spatial_features.transpose((2, 1, 0))
         # a = 100
         time_end = time.time()
@@ -103,7 +106,7 @@ class DemoDataset(DatasetTemplate):
         return data_dict
 
 
-datapath = 'tempTest/bin/cvte02_20220105075645_livox_front_00049899.bin'
+datapath = 'data/mykitti/testing/velodyne/1663139164.978024244.bin'
 cfg_ifle = 'tools/cfgs/kitti_models/my_centerpoint_yolo_down4.yaml'
 ckpt = 'output/kitti_models/my_centerpoint_yolo_down4/default/ckpt/checkpoint_epoch_80.pth'
 
@@ -148,7 +151,7 @@ def main():
     model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=True)
     model.cuda()
     model.eval()
-    display = False
+    display = True
     with torch.no_grad():
         total_time = 0
         total_num = 0
@@ -189,7 +192,7 @@ def main():
                 #     print(cfg['CLASS_NAMES'][ind - 1])
                 # print('pred_labels: ', pred_dicts[0]['pred_boxes'])
                 # print('J note !! ', pred_dicts[0]['pred_labels'])
-                
+                print(pred_dicts[0]['pred_boxes'])
                 V.draw_scenes(
                     points=data_dict['points'][:, 1:], ref_boxes=pred_dicts[0]['pred_boxes'],
                     ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels'] 
@@ -198,15 +201,15 @@ def main():
                 points = data_dict['points'][:, 1:].cpu().numpy()
                 ref_boxes = pred_dicts[0]['pred_boxes'].cpu().numpy()
 
-                pts.points = open3d.utility.Vector3dVector(points[:, :3])
-                vis.add_geometry(pts)
-                pts.colors = open3d.utility.Vector3dVector(np.ones((points.shape[0], 3)))
-                # draw boxes
-                vis = draw_box(vis, ref_boxes, (0, 1, 0), pred_dicts[0]['pred_labels'], pred_dicts[0]['pred_scores'])
-                time.sleep(0.5)         
-                vis.poll_events()
-                vis.clear_geometries()
-                vis.update_renderer()
+                # pts.points = open3d.utility.Vector3dVector(points[:, :3])
+                # vis.add_geometry(pts)
+                # pts.colors = open3d.utility.Vector3dVector(np.ones((points.shape[0], 3)))
+                # # draw boxes
+                # vis = draw_box(vis, ref_boxes, (0, 1, 0), pred_dicts[0]['pred_labels'], pred_dicts[0]['pred_scores'])
+                # time.sleep(0.5)         
+                # vis.poll_events()
+                # vis.clear_geometries()
+                # vis.update_renderer()
                 
         real_frame_number, cacu_frame_num, totalTime = demo_dataset.getRunTime()
         print('J note data 2voxel time is ', real_frame_number, cacu_frame_num, totalTime, totalTime/ cacu_frame_num)

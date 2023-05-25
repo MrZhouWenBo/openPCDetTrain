@@ -135,7 +135,7 @@ class CenterHead(nn.Module):
         heatmap = gt_boxes.new_zeros(num_classes, feature_map_size[1], feature_map_size[0])
         # print('J note assign target input gt_box shape is', gt_boxes.shape) 
 
-        print('J note: assign target heatmap resolution is:', heatmap.shape)
+        # print('J note: assign target heatmap resolution is:', heatmap.shape)
         
         # ret_boxes shape is  [500, 8]
         ret_boxes = gt_boxes.new_zeros((num_max_objs, gt_boxes.shape[-1] - 1 + 1))
@@ -303,7 +303,7 @@ class CenterHead(nn.Module):
     def generate_predicted_boxes(self, batch_size, pred_dicts):
         # 获取后处理参数
         post_process_cfg = self.model_cfg.POST_PROCESSING
-
+        print('post_process_cfg.POST_CENTER_LIMIT_RANGE', post_process_cfg.POST_CENTER_LIMIT_RANGE)
         # 中心点的限制范围[0, -20, -1, 36, 20, 3]
         post_center_limit_range = torch.tensor(post_process_cfg.POST_CENTER_LIMIT_RANGE).cuda().float()
 
@@ -391,7 +391,7 @@ class CenterHead(nn.Module):
     def forward(self, data_dict):
         # spatial_features_2d.shape is : 
         spatial_features_2d = data_dict['spatial_features_2d']
-        print('J note: CenterHead input feature map shape', spatial_features_2d.shape)
+        # print('J note: CenterHead input feature map shape', spatial_features_2d.shape)
         # 经过共享卷积层后  尺寸变为 [1, , , ]
         x = self.shared_conv(spatial_features_2d)
         # print('J note: after share cov  shape is', x.shape)

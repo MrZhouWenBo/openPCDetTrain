@@ -10,7 +10,7 @@ class CenterPoint(Detector3DTemplate):
         for cur_module in self.module_list:
             batch_dict = cur_module(batch_dict)
 
-        print("batch_dict", batch_dict['final_box_dicts'][0].keys())
+        # print("batch_dict", batch_dict['final_box_dicts'][0].keys())
         if self.training:
             loss, tb_dict, disp_dict = self.get_training_loss()
 
