@@ -681,8 +681,9 @@ def eval_class(gt_annos,
                 pr = np.zeros([len(thresholds), 4])
 
                 idx = 0
+                # print("!!222", dt_datas_list)
                 for j,num_part in enumerate(split_parts):
-
+                    print("!!!!!!!!!!!")
                     gt_datas_part = np.array(gt_datas_list[idx:idx+num_part])
                     dt_datas_part = np.array(dt_datas_list[idx:idx+num_part])
                     ignored_dets_part = np.array(ignored_dets[idx:idx+num_part])

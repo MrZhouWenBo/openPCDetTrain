@@ -66,7 +66,7 @@ class DemoDataset(DatasetTemplate):
 
     def __getitem__(self, index):
         if self.ext == '.bin':
-            points = np.fromfile(self.sample_file_list[index], dtype=np.float32).reshape(-1, 8)[:, 0:4]
+            points = np.fromfile(self.sample_file_list[index], dtype=np.float32).reshape(-1, 4)[:, 0:4]
         elif self.ext == '.npy':
             points = np.load(self.sample_file_list[index])
         else:
@@ -106,7 +106,7 @@ class DemoDataset(DatasetTemplate):
         return data_dict
 
 
-datapath = 'data/mykitti/testing/velodyne/1663139164.978024244.bin'
+datapath = 'data/mykitti/testing/velodyne/cloud_350.bin'
 cfg_ifle = 'tools/cfgs/kitti_models/my_centerpoint_yolo_down4.yaml'
 ckpt = 'output/kitti_models/my_centerpoint_yolo_down4/default/ckpt/checkpoint_epoch_80.pth'
 
