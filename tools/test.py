@@ -94,10 +94,10 @@ def repeat_eval_ckpt(model, test_loader, args, eval_output_dir, logger, ckpt_dir
     '''
     # evaluated ckpt record
     ckpt_record_file = eval_output_dir / ('eval_list_%s.txt' % cfg.DATA_CONFIG.DATA_SPLIT['test'])
-    print('J note ckpt_record_file', ckpt_record_file)
+    # print('J note ckpt_record_file', ckpt_record_file)
     with open(ckpt_record_file, 'a'):
         pass
-
+    
     # tensorboard log
     if cfg.LOCAL_RANK == 0:
         tb_log = SummaryWriter(log_dir=str(eval_output_dir / ('tensorboard_%s' % cfg.DATA_CONFIG.DATA_SPLIT['test'])))
@@ -108,7 +108,8 @@ def repeat_eval_ckpt(model, test_loader, args, eval_output_dir, logger, ckpt_dir
         # check whether there is checkpoint which is not evaluated
         # 检测是否有未被评估过的checkpoint
         cur_epoch_id, cur_ckpt = get_no_evaluated_ckpt(ckpt_dir, ckpt_record_file, args)
-        # print(cur_epoch_id, cur_ckpt)
+        print("jose note cur_epoch_id ",cur_epoch_id, cur_ckpt)
+        
         if cur_epoch_id == -1 or int(float(cur_epoch_id)) < args.start_epoch:
             wait_second = 30
             if cfg.LOCAL_RANK == 0:
@@ -123,16 +124,19 @@ def repeat_eval_ckpt(model, test_loader, args, eval_output_dir, logger, ckpt_dir
         total_time = 0
         first_eval = False
 
+        # 为模型加载checkpoint（模型参数）
         model.load_params_from_file(filename=cur_ckpt, logger=logger, to_cpu=dist_test)
         model.cuda()
 
         # start evaluation
         cur_result_dir = eval_output_dir / ('epoch_%s' % cur_epoch_id) / cfg.DATA_CONFIG.DATA_SPLIT['test']
+        # print("Jose note cfg is", cfg)
+        
         tb_dict = eval_utils.eval_one_epoch(
             cfg, model, test_loader, cur_epoch_id, logger, dist_test=dist_test,
             result_dir=cur_result_dir, save_to_file=args.save_to_file
         )
-
+        # exit()
         if cfg.LOCAL_RANK == 0:
             for key, val in tb_dict.items():
                 tb_log.add_scalar(key, val, cur_epoch_id)
@@ -141,6 +145,7 @@ def repeat_eval_ckpt(model, test_loader, args, eval_output_dir, logger, ckpt_dir
         with open(ckpt_record_file, 'a') as f:
             print('%s' % cur_epoch_id, file=f)
         logger.info('Epoch %s has been evaluated' % cur_epoch_id)
+        
 
 
 def main():

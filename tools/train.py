@@ -91,21 +91,25 @@ def main():
     logger.info('**********************Start logging**********************')
     gpu_list = os.environ['CUDA_VISIBLE_DEVICES'] if 'CUDA_VISIBLE_DEVICES' in os.environ.keys() else 'ALL'
     logger.info('CUDA_VISIBLE_DEVICES=%s' % gpu_list)
+    
 
     if dist_train:
         logger.info('total_batch_size: %d' % (total_gpus * args.batch_size))
+
+    
     for key, val in vars(args).items():
         logger.info('{:16} {}'.format(key, val))
+    
     log_config_to_file(cfg, logger=logger)
+    
     if cfg.LOCAL_RANK == 0:
         os.system('cp %s %s' % (args.cfg_file, output_dir))
 
     tb_log = SummaryWriter(log_dir=str(output_dir / 'tensorboard')) if cfg.LOCAL_RANK == 0 else None
-
+    
     # print('class names', cfg.CLASS_NAMES)
 
     # -----------------------create dataloader & network & optimizer---------------------------
-    # print('number workers', args.workers)
     #   1   创建数据加载对象  train_sampler is None
     train_set, train_loader, train_sampler = build_dataloader(
         dataset_cfg=cfg.DATA_CONFIG,
@@ -118,12 +122,14 @@ def main():
         merge_all_iters_to_one_epoch=args.merge_all_iters_to_one_epoch,
         total_epochs=args.epochs
     )
-
+    
     #  2   创建模型
     model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES), dataset=train_set)
     if args.sync_bn:
+        print('args.sync_bn')
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     model.cuda()
+    # exit()
     # print(model)
     # return
 
@@ -152,7 +158,7 @@ def main():
     if dist_train:
         model = nn.parallel.DistributedDataParallel(model, device_ids=[cfg.LOCAL_RANK % torch.cuda.device_count()])
     logger.info(model)
-
+    
     #  4 创建学习率调度器
     # print('sadsxxds', len(train_loader))
     lr_scheduler, lr_warmup_scheduler = build_scheduler(
@@ -164,7 +170,7 @@ def main():
     # print('debug:  dist_train', dist_train)
     logger.info('**********************Start training %s/%s(%s)**********************'
                 % (cfg.EXP_GROUP_PATH, cfg.TAG, args.extra_tag))
-    train = True
+    train = False
     if( train):
         train_model(
         model,
@@ -198,8 +204,7 @@ def main():
                 (cfg.EXP_GROUP_PATH, cfg.TAG, args.extra_tag))
     
     # 训练结束后,对模型进行评估
-    # 1 构建test数据集和 加载器
-    print('debug:  start evaluate module')
+    # 1 构建test数据集类对象 以及 数据加载器
     test_set, test_loader, sampler = build_dataloader(
         dataset_cfg=cfg.DATA_CONFIG,
         class_names=cfg.CLASS_NAMES,
@@ -207,20 +212,23 @@ def main():
         dist=dist_train, workers=args.workers, logger=logger, training=False
     )
 
-
+    
     # 2 构造评估结果输出文件
     eval_output_dir = output_dir / 'eval' / 'eval_with_train'
     eval_output_dir.mkdir(parents=True, exist_ok=True)
 
-    args.num_epochs_to_eval = 1   # 仅评估最后十个epoch
+    args.num_epochs_to_eval = 10   # 仅评估最后十个epoch
     args.start_epoch = max(args.epochs - args.num_epochs_to_eval, 0)  # Only evaluate the last args.num_epochs_to_eval epochs
-    # print('dist_train', dist_train)
+    
+    print("jose note ckpt_dir is", ckpt_dir)
+    
     # 3 调用test中的repeat_eval_ckpt对模型进行重复评估
     repeat_eval_ckpt(
         model.module if dist_train else model,
         test_loader, args, eval_output_dir, logger, ckpt_dir,
         dist_test=dist_train
     )
+    exit()
     logger.info('**********************End evaluation %s/%s(%s)**********************' %
                 (cfg.EXP_GROUP_PATH, cfg.TAG, args.extra_tag))
 

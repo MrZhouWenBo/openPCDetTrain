@@ -52,7 +52,7 @@ class KittiDataset(DatasetTemplate):
         self.kitti_infos = []
         self.include_kitti_data(self.mode)
         self.point_range = self.dataset_cfg['POINT_CLOUD_RANGE']
-        print('self.point_range = self.dataset_cfg[POINT_CLOUD_RANGE]', self.point_range)
+        # print('self.point_range = self.dataset_cfg[POINT_CLOUD_RANGE]', self.point_range)
         self.voxel_size =  self.dataset_cfg['DATA_PROCESSOR'][2]['VOXEL_SIZE']
         self.frame_number = 0
         self.total_time = 0
@@ -469,11 +469,16 @@ class KittiDataset(DatasetTemplate):
         if 'annos' not in self.kitti_infos[0].keys():
             return None, {}
 
-        from .kitti_object_eval_python import my_eval as kitti_eval
+        # from .kitti_object_eval_python import eval_jose as kitti_eval
         from .kitti_object_eval_python import eval_park as kitti_eval
+        # from .kitti_object_eval_python import eval as kitti_eval
+        # from .kitti_object_eval_python import eval_park as kitti_eval
 
+        # 检测的结果深拷贝到 eval_det_annos，  标注的gt信息拷贝到eval_gt_annos中
         eval_det_annos = copy.deepcopy(det_annos)
         eval_gt_annos = [copy.deepcopy(info['annos']) for info in self.kitti_infos]
+        # print(eval_det_annos[0].keys(), eval_gt_annos[0].keys())
+        # exit()
         ap_result_str, ap_dict = kitti_eval.get_official_eval_result(eval_gt_annos, eval_det_annos, class_names)
 
         return ap_result_str, ap_dict
@@ -490,8 +495,11 @@ class KittiDataset(DatasetTemplate):
             function:  自建数据集类别的dataloader  在运行迭代器时  调用该函数取出数据
         '''
         # index = 4
+        
         if self._merge_all_iters_to_one_epoch:
             index = index % len(self.kitti_infos)
+
+        # print("in my_kitti_dataset_change_head.py __getitem__ index", index)
 
         info = copy.deepcopy(self.kitti_infos[index])
 

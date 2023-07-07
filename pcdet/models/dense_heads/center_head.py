@@ -303,7 +303,7 @@ class CenterHead(nn.Module):
     def generate_predicted_boxes(self, batch_size, pred_dicts):
         # 获取后处理参数
         post_process_cfg = self.model_cfg.POST_PROCESSING
-        print('post_process_cfg.POST_CENTER_LIMIT_RANGE', post_process_cfg.POST_CENTER_LIMIT_RANGE)
+        # print('post_process_cfg.POST_CENTER_LIMIT_RANGE', post_process_cfg.POST_CENTER_LIMIT_RANGE)
         # 中心点的限制范围[0, -20, -1, 36, 20, 3]
         post_center_limit_range = torch.tensor(post_process_cfg.POST_CENTER_LIMIT_RANGE).cuda().float()
 
@@ -328,7 +328,7 @@ class CenterHead(nn.Module):
             # 当前模型不执行
             batch_vel = pred_dict['vel'] if 'vel' in self.separate_head_cfg.HEAD_ORDER else None
 
-            print('J note post progress pointCloud range is', self.point_cloud_range)
+            # print('J note post progress pointCloud range is', self.point_cloud_range)
 
             final_pred_dicts = centernet_utils.decode_bbox_from_heatmap(
                 heatmap=batch_hm, rot_cos=batch_rot_cos, rot_sin=batch_rot_sin,

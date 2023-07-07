@@ -8,6 +8,9 @@ from .rotate_iou import rotate_iou_gpu_eval
 
 @numba.jit
 def get_thresholds(scores: np.ndarray, num_gt, num_sample_pts=41):
+    '''
+        只是将score做了个降序排列
+    '''
     scores.sort()             # 将得分的一维数组 升序排列，如[1,2,3,4]
     scores = scores[::-1]        # 再将得分数组降序排列
     current_recall = 0  
@@ -26,16 +29,14 @@ def get_thresholds(scores: np.ndarray, num_gt, num_sample_pts=41):
     return thresholds
 
 
-#这个函数是处理一帧的数据, current_class是5个类别中的其中一类
+
 def clean_data(gt_anno, dt_anno, current_class, difficulty):
-    
     '''
-        print("____________clean_data() args:________________")
-        print('current_class  :  ',current_class)
-        print('difficulty : ',difficulty)
-            ____________clean_data() args:________________
-            current_class  :   0
-            difficulty :  0
+        #这个函数是处理一帧的数据, current_class是5个类别中的其中一类 按照类别筛选  difficulty参数为缺省不用
+
+        输入： 单帧gt和dt  当前选择的class以及difficulty(当前不用)
+
+        返回： num_valid_gt(gt中选中的目标物个数), ignored_gt(gt中选中标志位 选中为0选不中为-1), ignored_dt(同理ignore_gt)
     '''
 
     CLASS_NAMES = ['Car', 'Pedestrian', 'Cyclist', 'Van', 'Heavy_Truck', 'Light_Truck', 'Tricycle', 'Small_Bus',  'Big_Bus', 'Ying_Er_Che']
@@ -180,15 +181,19 @@ def compute_statistics_jit(overlaps,
                            thresh=0,
                            compute_fp=False,
                            compute_aos=False):
+    '''
+        @brief 这个函数的计算单元为一帧数据 功能：计算单帧 fp fn tp信息
 
-    det_size = dt_datas.shape[0]
+        输入： overlaps(单帧的iou矩阵) gt_datas(gt中所有目标物的个数) dt_datas(dt中所有目标物的得分) 
+    '''
+    det_size = dt_datas.shape[0]            # 该帧预测数据的个数
     gt_size = gt_datas
 
-    dt_scores = dt_datas[:, -1]   #获取预测的得分情况
+    dt_scores = dt_datas[:, -1]             #获取预测的得分情况
     #dt_scores = dt_datas
 
     assigned_detection = [False] * det_size # 存储是否每个检测都分配给了一个gt。
-    ignored_threshold = [False] * det_size    # 如果检测分数低于阈值，则存储数组
+    ignored_threshold = [False] * det_size  # 如果检测分数低于阈值，则存储数组
     if compute_fp:
         for i in range(det_size):
             if (dt_scores[i] < thresh):
@@ -204,7 +209,7 @@ def compute_statistics_jit(overlaps,
 
     for i in range(gt_size):
         if ignored_gt[i] == -1:
-            #如果不是当前class，如vehicle类别，
+            # 如果不是当前class，如vehicle类别，
             # 则跳过当前循环，继续判断下一个类别
             continue
 
@@ -431,11 +436,24 @@ def fused_compute_statistics(
                              min_overlap,
                              thresholds,
                              compute_aos=False):
+    '''
+        功能： 填充 pr
+
+        输入： 
+        
+            overlaps一组数据的iou矩阵:  eg 22帧为一组, 所有帧的gt一共1220个   dt 1293个  那么其shape is [gtnum, dtnum]
+
+            gt_nums dt_nums: 每帧gt \ dt 的个数 shape为 eg shape is [22 1]
+
+            gt_datas, dt_datas  每帧所有gt的个数(好像和gt_nums重复了) dt_datas 每帧中dt目标物的得分
+
+            ignored_gts, ignored_dets 每帧中目标物的选择与否标志位 选择为0 无效为 -1
+    '''
 
     
     gt_num = 0
     dt_num = 0
-    # 传入的数据是10帧数据，分10次进行运行
+    # 传入的数据是22帧数据，分22次进行运行
     for i in range(gt_nums.shape[0]):            
         for t,thresh in enumerate(thresholds):
             overlap = overlaps[dt_num:dt_num+dt_nums[i],gt_num:gt_num+gt_nums[i]]
@@ -474,6 +492,9 @@ def calculate_iou_partly(gt_annos, dt_annos, metric, num_parts=5):
         dt_annos: dict, must from get_label_annos() in kitti_common.py
         metric: eval type. 0: bbox, 1: bev, 2: 3d
         num_parts: int. a parameter for fast calculate algorithm
+
+    返回：
+        total_dt_num, total_gt_num 每一帧中所有dt gt的个数
     """
     #如果长度不相等，直接报错
     assert len(gt_annos) == len(dt_annos)
@@ -482,7 +503,9 @@ def calculate_iou_partly(gt_annos, dt_annos, metric, num_parts=5):
     #即： 每个文件中批注数量的list
     total_dt_num = np.stack([len(a["name"]) for a in dt_annos], 0)
     total_gt_num = np.stack([len(a["name"]) for a in gt_annos], 0)
-
+    # print(total_dt_num)
+    # print(total_gt_num)
+    # exit()
     num_examples = len(gt_annos)
     split_parts = get_split_parts(num_examples, num_parts)
 
@@ -555,7 +578,20 @@ def calculate_iou_partly(gt_annos, dt_annos, metric, num_parts=5):
 
 #参数difficulty是int类型，为0,1,2
 def _prepare_data(gt_annos, dt_annos, current_class, difficulty):
-    
+    '''
+        功能：
+
+        输入： gt_annos, dt_annos, 测试集所有gt和dt    current_class特定类别  difficulty: 特定难度(缺省不用)
+
+        返回： 
+                gt_datas_list,                  每一帧中所有目标物的个数 eg 长度为110
+
+                dt_datas_list,                  每一帧中所有目标物的得分 eg  长度为110 每个元素为shape为(dtnumber, 1)的numpy
+
+                ignored_gts, ignored_dets,      gt和dt中被选中否的标志位 选中为0否则为-1
+
+                total_num_valid_gt              gt中所有被选中目标物的个数
+    '''
     #数据初始化
     gt_datas_list = []
     dt_datas_list = []
@@ -564,15 +600,17 @@ def _prepare_data(gt_annos, dt_annos, current_class, difficulty):
 
     # 对于每一帧的数据进行操作
     for i in range(len(gt_annos)):
-        
-        #得到的是参数，当前帧的这个类别的 有效物体数，和有效物体的索引列表
+
+        # 按照类别筛选 得到的是参数，当前帧的这个类别的 有效物体数，和有效物体的索引列表
         rets = clean_data(gt_annos[i], dt_annos[i], current_class, difficulty)
         num_valid_gt, ignored_gt, ignored_det  = rets
+ 
         # 将每一帧的ignored_gt数据类型进行转换为numpy格式，再添加到ignored_gts
         ignored_gts.append(np.array(ignored_gt, dtype=np.int64))
         ignored_dets.append(np.array(ignored_det, dtype=np.int64))
         total_num_valid_gt += num_valid_gt
 
+        # gt
         gt_datas_num = len(gt_annos[i]["name"])
         gt_datas_list.append(gt_datas_num)
 
@@ -581,10 +619,10 @@ def _prepare_data(gt_annos, dt_annos, current_class, difficulty):
         dt_datas_list.append(dt_datas_score)
 
     return (
-                    gt_datas_list,  #存放的是 每一帧物体的个数
-                    dt_datas_list,  #存放的是每一帧 不同物体的得分的情况，是（N,1）
-                    ignored_gts, ignored_dets,   #存在
-                    total_num_valid_gt                 #存在
+                gt_datas_list,  #存放的是 每一帧物体的个数
+                dt_datas_list,  #存放的是每一帧 不同物体的得分的情况，是（N,1）
+                ignored_gts, ignored_dets,   #存在
+                total_num_valid_gt                 #存在
                     )               
 
 
@@ -602,67 +640,76 @@ def eval_class(gt_annos,
             dt_annos: dict, must from get_label_annos() in kitti_common.py
             current_classes: list of int, 0: car, 1: pedestrian, 2: cyclist
             difficultys: list of int. eval difficulty, 0: easy, 1: normal, 2: hard
-            metric: eval type. 0: bbox, 1: bev, 2: 3d
-            min_overlaps: float, min overlap. format: [num_overlap, metric, class].
+            metric: eval type. 0: bbox, 1: bev, 2: 3d    metric == 3
+            min_overlaps: float, min overlap. format: [num_overlap, metric, class]. 2 3 2
             num_parts: int. a parameter for fast calculate algorithm
-
         Returns:
             dict of recall, precision and aos
                     min_overlaps:
-                                    # (2, 3, num_classes) 其中:
+                                    # 1 (2, 3, num_classes) 其中:
                                     # 2 表示阈值为中等或者容易
                                     # 3 表示表示不同的指标 (bbox, bev, 3d), 
-                                    # num_classes用于每个类的阈值
-
+                                    # 4 num_classes用于每个类的阈值
             参数difficultys:[0, 1, 2],<class 'list'>
     """
 
     #如果验证集gt_annos中的帧数 和 从model中验证出来dt_annos帧的长度不一致，直接报错！
     assert len(gt_annos) == len(dt_annos)
+
     # 验证集中帧的总数是 num_examples:51
     num_examples = len(gt_annos)
+    # print("len(gt_annos) is", len(gt_annos))
     #得到的split_parts是一个list的类型，num_parts=5,
     # 意思是将51分为5部分，经过一下函数得到的是：split_parts：[10,10,10,10,10,1]
     split_parts = get_split_parts(num_examples, num_parts)
-    #计算iou
-    #rets = calculate_iou_partly(gt_annos,dt_annos, metric, num_parts)
+    # print("split_parts is ", split_parts)
+    # print(dt_annos[0])
+    # 计算iou
     rets = calculate_iou_partly(dt_annos, gt_annos, metric, num_parts)
+    
     overlaps, parted_overlaps, total_dt_num, total_gt_num = rets
-
+    # print(overlaps[0].shape, parted_overlaps[0].shape, len(overlaps), len(parted_overlaps))
+    # print(overlaps[0][0, 0], parted_overlaps[0][0, 0])
+    # exit()
     N_SAMPLE_PTS = 41
-
+    # print("min_overlaps is", min_overlaps, current_classes, difficultys)
     #获取min_overlaps的各个的维度，得到的是(2, 3, 5)
     # 获取当前类别的个数num_class：5，难度的个数为3
-    num_minoverlap = len(min_overlaps)            #得到长度为2
-    num_class = len(current_classes)
-    num_difficulty = len(difficultys)
+    num_minoverlap = len(min_overlaps)            # 2      0.5 0.7  shape is [2 3 2]
+    num_class = len(current_classes)              # 2      0 1 
+    num_difficulty = len(difficultys)             # 3      0 1 2  
 
-    #初始化precision，recall，aos
+    #初始化precision，recall，aos    (2, 3, 2, 41)
     precision = np.zeros([num_class, num_difficulty, num_minoverlap, N_SAMPLE_PTS])
     recall = np.zeros([num_class, num_difficulty, num_minoverlap, N_SAMPLE_PTS])
     aos = np.zeros([num_class, num_difficulty, num_minoverlap, N_SAMPLE_PTS])
+    # print(difficultys)
+    # exit()
 
     #每个类别：
     for m, current_class in enumerate(current_classes):
         # 每个难度：
         for l, difficulty in enumerate(difficultys):
-            #参数difficulty是int类型，为0,1,2
+            # 按照类别筛选出dt 和 gt
             rets = _prepare_data(gt_annos, dt_annos, current_class, difficulty)
             (gt_datas_list, dt_datas_list, ignored_gts, ignored_dets, total_num_valid_gt) = rets
-            
-            # 运行两次，首先进行中等难度的总体设置，然后进行简单设置。
+            # for index in range(len(dt_datas_list)):
+            #     print("dt_datas_list is", dt_datas_list[index].shape, gt_datas_list[index])
+            # print(min_overlaps[:, metric, m])
+            # exit()
+            # 运行两次，首先进行中等难度的总体设置，然后进行简单设置。  min_overlaps 【2， 3， 2】   min_overlaps[:, metric, m]= 【0.5， 0.7】
             for k, min_overlap in enumerate(min_overlaps[:, metric, m]):
                 thresholdss = []
                 # 循环浏览数据集中的图像。因此一次只显示一张图片。
                 for i in range(len(gt_annos)):
                     rets = compute_statistics_jit(
-                        overlaps[i],     # 单个图像的iou值b/n gt和dt
-                        gt_datas_list[i],       # 是一个数，表示当前帧中的物体个数
-                        dt_datas_list[i],       # N x 1阵列，表示的是预测得到的N个物体的得分情况
-                        ignored_gts[i],         # 长度N数组，-1、0
-                        ignored_dets[i],        # 长度N数组，-1、0
-                        metric,                             # 0, 1, 或 2 (bbox, bev, 3d)
-                        min_overlap=min_overlap,         # 浮动最小IOU阈值为正
+                        overlaps[i],                # 单个图像的iou值b/n gt和dt
+                        gt_datas_list[i],           # 是一个数，表示当前帧中的物体个数
+                        dt_datas_list[i],           # N x 1阵列，表示的是预测得到的N个物体的得分情况
+                        ignored_gts[i],             # 长度N数组，-1、0
+                        ignored_dets[i],            # 长度N数组，-1、0
+                        metric,                     # 0, 1, 或 2 (bbox, bev, 3d)
+                        min_overlap=min_overlap,    # 浮动最小IOU阈值为正
                         thresh=0.0,                 # 忽略得分低于此值的dt。
                         compute_fp=False)
 
@@ -672,22 +719,30 @@ def eval_class(gt_annos,
                 #一维数组，记录匹配的dts分数，将list转为np格式
                 thresholdss = np.array(thresholdss)
 
-                # total_num_valid_gt是51帧数据里，vehicle出现的总个数
+                # total_num_valid_gt 总的测试gt（110帧） 中，所有目标物的个数
                 thresholds = get_thresholds(thresholdss, total_num_valid_gt)
                 thresholds = np.array(thresholds)
 
                 # thresholds是 N_SAMPLE_PTS长度的一维数组，记录分数，递减，表示阈值
-                # 储存有关gt/dt框的信息（是否忽略，fn，tn，fp）
+                # 储存有关gt/dt框的信息（是否忽略，fn，tn，fp）  每个得分对应着一个fp fn tn 
                 pr = np.zeros([len(thresholds), 4])
 
                 idx = 0
                 # print("!!222", dt_datas_list)
                 for j,num_part in enumerate(split_parts):
-                    print("!!!!!!!!!!!")
-                    gt_datas_part = np.array(gt_datas_list[idx:idx+num_part])
-                    dt_datas_part = np.array(dt_datas_list[idx:idx+num_part])
-                    ignored_dets_part = np.array(ignored_dets[idx:idx+num_part])
-                    ignored_gts_part = np.array(ignored_gts[idx:idx+num_part])
+                    # for ssss in dt_datas_list[idx:idx+num_part]:
+                    #     print(ssss.shape)
+                    # print(len(gt_datas_list), len(dt_datas_list))
+                    # gt_datas_part = np.array(gt_datas_list[idx:(idx+num_part)])
+                    # dt_datas_part = np.array(dt_datas_list[idx:(idx+num_part)])
+                    
+                    # ignored_dets_part = np.array(ignored_dets[idx:idx+num_part])
+                    # ignored_gts_part = np.array(ignored_gts[idx:idx+num_part])
+                    gt_datas_part = list(gt_datas_list[idx:(idx+num_part)])
+                    dt_datas_part = list(dt_datas_list[idx:(idx+num_part)])
+                    
+                    ignored_dets_part = list(ignored_dets[idx:idx+num_part])
+                    ignored_gts_part = list(ignored_gts[idx:idx+num_part])
 
                     # 再将各部分数据融合
                     fused_compute_statistics(
@@ -781,21 +836,15 @@ def do_eval(gt_annos,
 
 def get_official_eval_result(gt_annos, dt_annos, current_classes, PR_detail_dict=None):
 
-    # overlap_0_7 = np.array([[0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4,
-    #                          0.4, 0.4], [0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
-    #                         [0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4]])
-    # overlap_0_5 = np.array([[0.35, 0.35, 0.35, 0.35,0.35, 0.35, 0.35, 0.35,
-    #                          0.35, 0.35], [0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35],
-    #                         [0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35]])
-
     overlap_0_7 = np.array([[0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7], 
                             [0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7],
                             [0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7]
                            ])
-    overlap_0_5 = np.array([[0.5, 0.5, 0.5, 0.5,0.5, 0.5, 0.5, 0.5,
-                             0.5, 0.5], [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
-                            [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]])                        
-    min_overlaps = np.stack([overlap_0_7, overlap_0_5], axis=0)  # [2, 3, 5]
+    overlap_0_5 = np.array([[0.5, 0.5, 0.5, 0.5,0.5, 0.5, 0.5, 0.5, 0.5, 0.5], 
+                            [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
+                            [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+                            ])                        
+    min_overlaps = np.stack([overlap_0_7, overlap_0_5], axis=0)  # shape is [2, 3, 10]  这个10是类别数量
     class_to_name = {
         0: 'Car',
         1: 'Pedestrian',
@@ -808,6 +857,7 @@ def get_official_eval_result(gt_annos, dt_annos, current_classes, PR_detail_dict
         8: 'Big_Bus', 
         9: 'Ying_Er_Che'
     }
+
     #将名字和对应的类别号反一下，便于索引
     name_to_class = {v: n for n, v in class_to_name.items()}
 
@@ -824,17 +874,21 @@ def get_official_eval_result(gt_annos, dt_annos, current_classes, PR_detail_dict
             current_classes_int.append(curcls)
     #当前的类别变成了含有数字的列表   current_classes=[ 0,1,2]
     current_classes = current_classes_int
-
+    # print(current_classes)
+    # exit()
     #下面一行的作用：min_overlaps[:,:,[0,1,2,3,4]]，
     # 取min_overlaps的前5列，因为有5个类别是需要分类和计算的
     #得到的min_overlaps的形状：（2,3,5）
     min_overlaps = min_overlaps[:, :, current_classes]
+    # print("min_overlaps", min_overlaps)
     
     result = ''
     # check whether name is valid
     compute_aos = False
-
+    # print(PR_detail_dict)
+    # exit()
     #调用函数，计算各个值，4个指标
+    #  gt_annos, dt_annos GT和检测结果信息   current_classes=[0, 1]  min_overlaps shape[2,3,2]  PR_detail_dict=None
     mAP_bev, mAP_3d, mAP_bev_R40, mAP_3d_R40 = do_eval(
         gt_annos, dt_annos, current_classes, min_overlaps, compute_aos, PR_detail_dict=PR_detail_dict)
 

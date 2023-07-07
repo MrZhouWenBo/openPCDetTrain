@@ -578,14 +578,14 @@ def do_eval(gt_annos,
             PR_detail_dict=None):
     # min_overlaps: [num_minoverlap, metric, num_class]
     difficultys = [0, 1, 2]
-    ret = eval_class(gt_annos, dt_annos, current_classes, difficultys, 0,
-                     min_overlaps, compute_aos)
-    # ret: [num_class, num_diff, num_minoverlap, num_sample_points]
-    mAP_bbox = get_mAP(ret["precision"])
-    mAP_bbox_R40 = get_mAP_R40(ret["precision"])
+    # ret = eval_class(gt_annos, dt_annos, current_classes, difficultys, 0,
+    #                  min_overlaps, compute_aos)
+    # # ret: [num_class, num_diff, num_minoverlap, num_sample_points]
+    # mAP_bbox = get_mAP(ret["precision"])
+    # mAP_bbox_R40 = get_mAP_R40(ret["precision"])
 
-    if PR_detail_dict is not None:
-        PR_detail_dict['bbox'] = ret['precision']
+    # if PR_detail_dict is not None:
+    #     PR_detail_dict['bbox'] = ret['precision']
 
     mAP_aos = mAP_aos_R40 = None
     if compute_aos:
@@ -660,11 +660,11 @@ def get_official_eval_result(gt_annos, dt_annos, current_classes, PR_detail_dict
     result = ''
     # check whether alpha is valid
     compute_aos = False
-    for anno in dt_annos:
-        if anno['alpha'].shape[0] != 0:
-            if anno['alpha'][0] != -10:
-                compute_aos = True
-            break
+    # for anno in dt_annos:
+    #     if anno['alpha'].shape[0] != 0:
+    #         if anno['alpha'][0] != -10:
+    #             compute_aos = True
+    #         break
     mAPbbox, mAPbev, mAP3d, mAPaos, mAPbbox_R40, mAPbev_R40, mAP3d_R40, mAPaos_R40 = do_eval(
         gt_annos, dt_annos, current_classes, min_overlaps, compute_aos, PR_detail_dict=PR_detail_dict)
 

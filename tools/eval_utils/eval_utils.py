@@ -25,10 +25,12 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
     result_dir.mkdir(parents=True, exist_ok=True)
 
     final_output_dir = result_dir / 'final_result' / 'data'
+    # print("final_output_dir", final_output_dir)
+    
     # save_to_file is false
     if save_to_file:
         final_output_dir.mkdir(parents=True, exist_ok=True)
-
+    
     metric = {
         'gt_num': 0,
     }
@@ -36,7 +38,8 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
     for cur_thresh in cfg.MODEL.POST_PROCESSING.RECALL_THRESH_LIST:
         metric['recall_roi_%s' % str(cur_thresh)] = 0
         metric['recall_rcnn_%s' % str(cur_thresh)] = 0
-
+    # print(metric)
+    
     dataset = dataloader.dataset
     class_names = dataset.class_names
     
@@ -55,31 +58,38 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
     
     # 设置成评估模式  这样就不运行 训练代码了  只运行前向推理代码
     model.eval()
-
+    # 
     if cfg.LOCAL_RANK == 0:
         progress_bar = tqdm.tqdm(total=len(dataloader), leave=True, desc='eval', dynamic_ncols=True)
     start_time = time.time()
-
+    
     # 开始评估  
     for i, batch_dict in enumerate(dataloader):
+        
         load_data_to_gpu(batch_dict)
+        
+        # pred_dicts有 ['pred_boxes'   'pred_scores'  'pred_labels']三个键  ret_dict为空
         with torch.no_grad():
             pred_dicts, ret_dict = model(batch_dict)
-        
+        # print("!!!!!!!!", ret_dict)
         disp_dict = {}
-
+        
         # 统计metrics信息
         statistics_info(cfg, ret_dict, metric, disp_dict)
+        # print("!!!!!!!!",disp_dict, ret_dict)
+        
         annos = dataset.generate_prediction_dicts(
             batch_dict, pred_dicts, class_names,
             output_path=final_output_dir if save_to_file else None
         )
         # 
+        # print(annos)
+        # exit()
         det_annos += annos
         if cfg.LOCAL_RANK == 0:
             progress_bar.set_postfix(disp_dict)
             progress_bar.update()
-
+    
     if cfg.LOCAL_RANK == 0:
         progress_bar.close()
 
@@ -110,7 +120,7 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
         logger.info('recall_rcnn_%s: %f' % (cur_thresh, cur_rcnn_recall))
         ret_dict['recall/roi_%s' % str(cur_thresh)] = cur_roi_recall
         ret_dict['recall/rcnn_%s' % str(cur_thresh)] = cur_rcnn_recall
-
+    
     total_pred_objects = 0
     for anno in det_annos:
         total_pred_objects += anno['name'].__len__()
@@ -119,8 +129,9 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
 
     with open(result_dir / 'result.pkl', 'wb') as f:
         pickle.dump(det_annos, f)
+    
+    print("kkk",class_names)
 
-    # print("kkk",class_names)
     result_str, result_dict = dataset.evaluation(
         det_annos, class_names,
         eval_metric=cfg.MODEL.POST_PROCESSING.EVAL_METRIC,
@@ -129,7 +140,7 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
 
     logger.info(result_str)
     ret_dict.update(result_dict)
-
+    
     logger.info('Result is save to %s' % result_dir)
     logger.info('****************Evaluation done.*****************')
     return ret_dict
